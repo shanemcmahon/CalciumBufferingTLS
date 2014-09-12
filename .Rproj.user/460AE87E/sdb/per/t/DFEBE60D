@@ -1,0 +1,16 @@
+{
+    "contents" : "pkg.list <- c(\"minpack.lm\", \"mosaic\", \"doParallel\", \"foreach\")\nsuccess <- TRUE\nfor(pkg.name in pkg.list){\n    install.packages(pkg.name)\n    success <- success && require(package = pkg.name, quietly = TRUE, warn.conflicts = FALSE, character.only = TRUE)\n}\nif(success){\nprint(\"Packages were successfully installed and loaded.\")  \n}else{\n  for(pkg.name in pkg.list){\n    warning(paste(\"Could not install or load package:\",pkg.name))\n  }  \n}\n\n",
+    "created" : 1409786337090.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "118746990",
+    "id" : "DFEBE60D",
+    "lastKnownWriteTime" : 1409677830,
+    "path" : "C:/Users/shane/Desktop/CalciumBufferingTLS/Setup.Ca.Buffering.TLS.R",
+    "project_path" : "Setup.Ca.Buffering.TLS.R",
+    "properties" : {
+    },
+    "source_on_save" : false,
+    "type" : "r_source"
+}

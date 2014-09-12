@@ -1,0 +1,427 @@
+
+if(interactive.file.chooser){
+  print("All data files are assumed to be in comma seperated value (csv) format. The first row is assumed contain column names. For details regarding the format see the documentation.")
+  
+  print("Select the csv file containing the fluorescence data.")
+  fluorescence.filename <- choose.files(caption = "Select the csv file containing the fluorescence data.")
+  
+  print("Select the csv file containing standard errors for the fluorescence measurements.")
+  fluorescence.se.filename <- choose.files(caption = "Select the csv file containing standard errors for the fluorescence measurements.")
+  
+  print("Select the csv file containing the change in total calcium concentration data.")
+  delta.ca.total.filename <- choose.files(caption = "Select the csv file containing the change in total calcium concentration data.")
+  print("Select the csv file containing standard errors for the change in total calcium measurements.")
+  delta.ca.total.se.filename <- choose.files(caption = "Select the csv file containing standard errors for the change in total calcium measurements.")  
+}
+
+#############################################################################################################################
+#############################################################################################################################
+
+# End Section 1
+
+#############################################################################################################################
+#############################################################################################################################
+
+
+#############################################################################################################################
+#############################################################################################################################
+
+# Begin Section 2: function library
+
+#############################################################################################################################
+#############################################################################################################################
+
+require(compiler); require(foreach); require(doParallel); require(minpack.lm); require(mosaic)
+
+String.Length <- function(str.1){
+  i <- 1
+  repeat{
+    if(substring(str.1,i,i+1)=="")
+      return(i-1)
+    i <- i +1
+  }
+}
+
+T.L.S.Distance <- function(x.error, beta, x, y, x.weight, y.weight, Fxn, return.vector=FALSE,x.max=NULL,x.min=NULL, return.matrix = FALSE, ...){
+  
+  if(is.null(dim(x))){
+    x <- matrix(x,nrow=1)
+    x.error <- matrix(x.error, nrow=1)
+    x.weight <- matrix(x.weight, nrow=1)
+    y.weight <- matrix(y.weight, nrow=1)
+  }
+  x.bound.penalty <- matrix(0,nrow(x),ncol(x))
+  if(!is.null(x.max)){
+    if(is.null(ncol(x.max))){
+      for(i in 1:length(x.max)){
+        x.bound.violations <- x.max[i] < x[,i] + x.error[,i]
+        x.bound.penalty[x.bound.violations,i] <- abs((x[,i] + x.error[,i])-x.max[i])[x.bound.violations]
+        x.error[x.bound.violations,i] <- (x.max[i] - x[,i])[x.bound.violations]
+      }
+    }else{
+      x.bound.violations <- x.max < x + x.error
+      x.bound.penalty[x.bound.violations] <- abs((x + x.error)-x.max)[x.bound.violations]
+      x.error[x.bound.violations] <- (x.max - x)[x.bound.violations]
+    }
+  }
+  
+  
+  if(!is.null(x.min)){
+    if(is.null(ncol(x.min))){
+      for(i in 1:length(x.min)){
+        x.bound.violations <- x.min[i] > x[,i] + x.error[,i]
+        x.bound.penalty[x.bound.violations,i] <- x.bound.penalty[x.bound.violations,i] + abs((x[,i] + x.error[,i])-x.min[i])[x.bound.violations]
+        x.error[x.bound.violations,i] <- (x.min[i] - x[,i])[x.bound.violations]
+      }
+    }else{
+      x.bound.violations <- x.min > x + x.error
+      x.bound.penalty[x.bound.violations] <- abs((x + x.error)-x.min)[x.bound.violations]
+      x.error[x.bound.violations] <- (x.min - x)[x.bound.violations]
+    }
+  }
+  
+  y.hat <- Fxn(x+x.error,beta, ...)
+  y.error <- y.hat - y
+  out <- NULL  
+  x.out <- NULL  
+  
+  
+  
+  if(is.null(ncol(x.weight))){
+    for(i in 1:length(x.weight)){
+      x.out <- cbind(x.out, x.error[,i]^2*x.weight[i]^2)
+    }
+  }else{
+    x.out <- (x.error^2*x.weight^2)
+  }
+  
+  y.out <- NULL  
+  if(is.null(ncol(y.weight))){
+    
+    for(i in 1:length(y.weight)){
+      y.out <- cbind(y.out, y.error[,i]^2*y.weight[i]^2)
+    }
+  }else{
+    y.out <- (y.error^2*y.weight^2)
+  }
+  
+  
+  
+  
+  out <- cbind(y.out,x.out)
+  out <- out * replicate(ncol(out),exp(rowSums(abs(x.bound.penalty))))
+  out <- rowSums(out)
+  
+  if(!return.vector){
+    return(sum(out)^.5)
+  }
+  return(out^.5)
+}
+T.L.S.Distance.C <- cmpfun(T.L.S.Distance)
+
+T.L.S <- function(beta, ifixb, ifixx, y, x, x.weight, y.weight, beta.lower=-Inf, beta.upper=Inf, return.vector=FALSE, Fxn, x.error, beta2 = NULL,tls.env , x.max=NULL, x.min=NULL,...){
+  
+  if(!is.null(beta2)){
+    beta2[!ifixb] <- beta
+    beta <- beta2
+  }
+  values <- array(0, nrow(x))
+  ifixb <- as.logical(ifixb)
+  beta <- unlist(beta)
+  if(length(beta.lower)!=length(beta)){
+    beta.lower <- rep(-Inf,length(beta))
+  }
+  if(length(beta.upper)!=length(beta)){
+    beta.upper <- rep(Inf,length(beta))
+  }
+  if(!ifixx){
+    if(length(y.weight) < length(y)){
+      y.weight <- matrix(replicate(nrow(y),matrix(y.weight,nrow=1)),nrow=nrow(y))
+    }
+    if(length(x.weight) < length(x)){
+      x.weight <- matrix(replicate(nrow(x),matrix(x.weight,nrow=1)),nrow=nrow(x))
+    }
+    for(data.index in seq(nrow(x))){
+      fit <- optim(par=x.error[data.index,],fn = T.L.S.Distance.C, beta = beta, x = x[data.index, ] , y = y[data.index, ],x.weight = x.weight[data.index,] ,y.weight = y.weight[data.index,] ,Fxn = Fxn, x.max = x.max, x.min = x.min, ...)
+      values[data.index] <-  fit$value
+      x.error[data.index,] <-  fit$par
+    }
+    
+    tls.env$x.error <- x.error
+  }else{ #ifixx
+    values <- T.L.S.Distance.C(x.error = x.error,beta = beta,x = x,y = y,x.weight = x.weight,y.weight = y.weight, Fxn = Fxn, return.vector = TRUE,x.max = x.max, x.min = x.min, ...)
+  } #ifixb
+  
+  
+  if (any(beta[!ifixb] < beta.lower[!ifixb])){
+    values <- values * (1 + sum(abs((beta.lower[!ifixb] - beta[!ifixb])[which(beta[!ifixb] < beta.lower[!ifixb])]) ) ) 
+  }
+  if (any(beta[!ifixb] > beta.upper[!ifixb])){
+    values <- values * (1 + sum(abs((beta[!ifixb] - beta.upper[!ifixb])[which(beta[!ifixb] > beta.upper[!ifixb])]) ) )
+  }
+  
+  
+  if(return.vector==TRUE){
+    return(values)
+  }
+  return(sum(values^2))
+}
+T.L.S.C <- cmpfun(T.L.S)
+
+Delta.Ca.Total.Hat <- function(x,beta){
+  #   x[,1] == final fluorescence
+  #   x[,2] == final fluorescence
+  # beta[1]   == dynamic range
+  #beta[2]   == dye kd
+  #   beta[3] == dye concentration
+  #   beta[4] == endogenous buffer 1 kd
+  #   beta[5] == endogenous buffer 1 concentration
+  #   beta[6] == endogenous buffer 2 kd
+  #   beta[7] == endogenous buffer 2 concentration
+  #   beta[8] == nonsaturable endogenous buffer
+  #   beta[9] == accessible volume fraction
+  
+  calcium.final   <- ((x[,2] - (1/beta[1]))/(1 - x[,2])) * beta[2]
+  
+  calcium.initial <- ((x[,1] - (1/beta[1]))/(1 - x[,1])) * beta[2]
+  
+  delta.ca.total.hat  <- (1+beta[8])*(calcium.final - calcium.initial) - beta[4] * beta[5]/(beta[4] + calcium.final) + beta[4] * beta[5]/(beta[4] + calcium.initial) - beta[6] * beta[7]/(beta[6] + calcium.final) + beta[6] * beta[7]/(beta[6] + calcium.initial) - beta[2] * beta[3]/(beta[2] + calcium.final) + beta[2] * beta[3]/(beta[2] + calcium.initial)
+  
+  delta.ca.total.hat <- cbind(delta.ca.total.hat * beta[9])
+}
+Delta.Ca.Total.Hat.C <- cmpfun(Delta.Ca.Total.Hat)
+
+T.L.S.Gradient <- function(beta, x, y, x.error, x.weight, y.weight, beta2=NULL, beta.lower=-Inf, beta.upper=Inf, return.vector=TRUE, Distance.Function = T.L.S.Distance.C, Fxn, return.matrix=FALSE, F.Grad = NULL, ifixx = TRUE, ifixb, x.max = NULL, x.min = NULL, tls.env, grad.tol = .Machine$double.eps^.5, ...)
+{
+  gradient <- double(length(beta))
+  
+  if(!is.null(F.Grad)){
+    gradient <-  colSums(2*(y - Fxn(x = x + x.error , beta = beta, ...)) * F.Grad(x = x + x.error, beta = beta, ifixb, ...))
+    gradient[ifixb] <- 0
+  }else{
+    
+    gradient <- NULL
+    # no user supplied gradient
+    for(par.index in 1:length(beta)){
+      if(ifixb[par.index]){
+        gradient <- c(gradient,0)
+        next
+      }
+      delta <- double(length(beta))
+      delta[[par.index]] <- abs(beta[[par.index]] * .Machine$double.eps^.5) + .Machine$double.eps^.5
+      delta <- unlist(delta)
+      
+      grad0 <-  (T.L.S.C(beta = beta + delta, x = x, y = y, x.weight = x.weight, y.weight = y.weight, beta.lower = beta.lower, beta.upper = beta.upper, return.vector = FALSE,Fxn = Fxn, x.error = x.error, x.max = x.max, x.min = x.min, ifixx = ifixx, ifixb = as.logical(ifixb), tls.env = tls.env) - T.L.S.C(beta = beta - delta, x = x, y = y, x.weight = x.weight, y.weight = y.weight, beta.lower = beta.lower, beta.upper = beta.upper, return.vector = FALSE,Fxn = Fxn, x.error = x.error, x.max = x.max, x.min = x.min, ifixx = ifixx, ifixb = as.logical(ifixb), tls.env = tls.env) )/(2*delta[[par.index]])
+      
+      gradient <- c(gradient, grad0)
+      
+    }    
+    
+  }
+  
+  return(gradient)
+}
+T.L.S.Gradient.C <- cmpfun(T.L.S.Gradient)
+
+S.G.D <- function(beta, x, y, x.error=NULL, x.weight, y.weight, x.min = NULL, x.max = NULL, beta.lower, beta.upper, ifixb, Objective.Fxn = T.L.S.C, solution.tolerance=.Machine$double.eps^.5, max.iter = 5000, num.steps = 500, Grad = T.L.S.Gradient.C, decay.constant=.9995, data.env = new.env(), Fxn, parameter.boundary.margin = .01, ...){
+  if(is.null(x.error)){
+    x.error <- x*0
+  }
+  ifixb <- as.logical(ifixb)
+  n.row <- nrow(x)
+  n.col.x <- ncol(x)
+  n.col.y <- ncol(y)
+  Objective.Fxn(beta = beta,ifixb = ifixb,ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, Fxn = Fxn, x.error = x.error, tls.env = data.env, x.min = x.min, x.max = x.max  )
+  x.error <- data.env$x.error
+  nls.fit <- nls.lm(par = beta[!ifixb],lower = beta.lower[!ifixb] ,upper = beta.upper[!ifixb] ,fn = Objective.Fxn, ifixb = ifixb, ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, beta.lower = beta.lower, beta.upper = beta.upper, return.vector = TRUE, Fxn = Fxn, x.error = x.error, beta2 = beta, tls.env = data.env, x.max = x.max, x.min = x.min )
+  beta[!ifixb] <- nls.fit$par
+  best.par <- beta
+  best.int.par <- beta
+  best.val <- Objective.Fxn(beta = beta,ifixb = ifixb,ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, Fxn = Fxn, x.error = x.error, tls.env = data.env, x.min = x.min, x.max = x.max  )
+  x.error <- data.env$x.error
+  print(best.val)
+  print(best.par)
+  
+  j <- 1
+  k<-1
+  eta <- (beta.upper - beta.lower)/num.steps
+  if(any(!is.finite(eta))){
+    eta <- rep(x = 1/num.steps, times = sum(!ifixb))
+  }
+  reshuffle.counter <- 0
+  shuffle.seq <- resample(seq(n.row))
+  
+  while(j <= max.iter){
+    reshuffle.counter <- reshuffle.counter + 1
+    eta <- eta * decay.constant
+    if(reshuffle.counter > nrow(x)-1){
+      shuffle.seq <- resample(seq(nrow(x)))
+      reshuffle.counter <- 1 
+      parameter.on.boundary <- any(beta[!ifixb] < beta.lower[!ifixb] + (beta.upper[!ifixb] - beta.lower[!ifixb]) * parameter.boundary.margin) | any(beta[!ifixb] > beta.upper[!ifixb] - (beta.upper[!ifixb] - beta.lower[!ifixb]) * parameter.boundary.margin)
+      if(parameter.on.boundary){
+#if parameters on boundary, then randomly reset parameters. The method for resetting parameters is randomly chosen between:
+#1: randomly reset parameters
+#2: set beta to previous best point on interior of parameter space
+        if(resample(c(TRUE,FALSE), 1)){
+          beta[!ifixb] <-  beta.lower[!ifixb] + (beta.upper[!ifixb] - beta.lower[!ifixb]) * runif(sum(!ifixb), min = parameter.boundary.margin, max = (1-parameter.boundary.margin))
+        }else{
+          beta <- best.int.par 
+        }
+      
+        x.error <- matrix(0, nrow = n.row, ncol = n.col.x)
+        Objective.Fxn(beta = beta,ifixb = ifixb,ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, Fxn = Fxn, x.error = x.error, tls.env = data.env, x.min = x.min, x.max = x.max  )
+        x.error <- data.env$x.error
+        nls.fit <- nls.lm(par = beta[!ifixb],lower = beta.lower[!ifixb] ,upper = beta.upper[!ifixb] ,fn = Objective.Fxn, ifixb = ifixb, ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, beta.lower = beta.lower, beta.upper = beta.upper, return.vector = TRUE, Fxn = Fxn, x.error = x.error, beta2 = beta, tls.env = data.env, x.max = x.max, x.min = x.min )
+        beta[!ifixb] <- nls.fit$par
+#         eta <- (beta.upper - beta.lower)/num.steps
+      }
+      
+      
+      current.val <- Objective.Fxn(beta = beta,ifixb = ifixb,ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, Fxn = Fxn, x.error = x.error, tls.env = data.env, x.min = x.min, x.max = x.max  )
+      x.error <- data.env$x.error
+      print(j)
+      if(current.val < best.val){
+        nls.fit <- nls.lm(par = beta[!ifixb],lower = beta.lower[!ifixb] ,upper = beta.upper[!ifixb] ,fn = Objective.Fxn, ifixb = ifixb, ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, beta.lower = beta.lower, beta.upper = beta.upper, return.vector = TRUE, Fxn = Fxn, x.error = x.error, beta2 = beta, tls.env = data.env, x.max = x.max, x.min = x.min )
+        beta[!ifixb] <- nls.fit$par
+        best.par <- beta
+        best.val <- Objective.Fxn(beta = beta,ifixb = ifixb,ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, Fxn = Fxn, x.error = x.error, tls.env = data.env, x.min = x.min, x.max = x.max  )
+        x.error <- data.env$x.error
+        print(best.val)
+        print(best.par)
+        parameter.on.boundary <- any(beta[!ifixb] < beta.lower[!ifixb] + (beta.upper[!ifixb] - beta.lower[!ifixb]) * parameter.boundary.margin) | any(beta[!ifixb] > beta.upper[!ifixb] - (beta.upper[!ifixb] - beta.lower[!ifixb]) * parameter.boundary.margin)
+        if(!parameter.on.boundary){
+          best.in.par <- beta
+        }
+      }
+    }
+    
+    #     point <- resample(x=data.1, size=3)
+    
+    delta <- Grad(beta = beta,x = matrix(x[shuffle.seq[reshuffle.counter],] ,ncol = ncol(x)), y = matrix(y[shuffle.seq[reshuffle.counter],], ncol = ncol(y)), x.error = matrix(x.error[shuffle.seq[reshuffle.counter],], ncol = ncol(x)), x.weight = matrix(x.weight[shuffle.seq[reshuffle.counter],], ncol = ncol(x)), y.weight = matrix(y.weight[shuffle.seq[reshuffle.counter],], ncol = ncol(y)), beta.lower = beta.lower, beta.upper = beta.upper, Fxn = Fxn, ifixx = TRUE, ifixb = ifixb,tls.env = data.env, x.min = x.min, x.max = x.max )
+    
+    
+    
+    while(any(((beta - eta*delta) < beta.lower) | ((beta - eta*delta) > beta.upper))){
+      delta <- delta/10
+    }
+    
+    beta <- beta - eta * delta
+    beta[beta < beta.lower] <- beta.lower[beta < beta.lower]
+    beta[beta > beta.upper] <- beta.upper[beta > beta.upper]
+    
+    #     print(j)
+    j <- j + 1
+  }
+  return(list(value = best.val, par = best.par, fvec = Objective.Fxn(beta = beta,ifixb = ifixb,ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, Fxn = Fxn, x.error = x.error, tls.env = data.env, x.min = x.min, x.max = x.max, return.vector = TRUE )))    
+}
+S.G.D.C <- cmpfun(S.G.D)
+
+
+
+#############################################################################################################################
+#############################################################################################################################
+
+# End Section 2
+
+#############################################################################################################################
+#############################################################################################################################
+
+
+
+#############################################################################################################################
+#############################################################################################################################
+
+# Begin Section 3: executable code
+
+#############################################################################################################################
+#############################################################################################################################
+
+if(!interactive.file.chooser){
+  if(substring(data.directory,String.Length(data.directory)) == "/"){
+    data.directory <-  substring(data.directory,1, String.Length(data.directory)-1)
+  }  
+  fluorescence.filename <- file.path(data.directory,fluorescence.filename)
+  fluorescence.se.filename <- file.path(data.directory, fluorescence.se.filename)
+  delta.ca.total.filename <- file.path(data.directory, delta.ca.total.filename)
+  delta.ca.total.se.filename <- file.path(data.directory, delta.ca.total.se.filename)
+}
+
+
+x <- as.matrix(read.csv(fluorescence.filename))
+x.weight <- as.matrix(read.csv(fluorescence.se.filename))
+y <- as.matrix(read.csv(delta.ca.total.filename))
+y.weight <- as.matrix(read.csv(delta.ca.total.se.filename))
+
+if( length(unique(c(nrow(x),nrow(y),nrow(x.weight),nrow(y.weight)))) > 1){
+  stop("fluorescence, change in total calcium, and their respective measurement errors must have the same number of rows")
+}
+
+
+x.weight <- 1/x.weight
+y.weight <- 1/y.weight
+tls.data.env <- new.env()
+
+x.min <- c(F.MIN, F.MIN)
+x.max <- c(F.MAX, F.MAX)
+ifixb <- parameter.is.fixed
+
+
+if(!do.bootstrap.estimate){
+  sgd.result <- S.G.D.C(beta = beta, x = x, y = y, x.weight = x.weight, y.weight = y.weight, x.min = x.min, x.max = x.max, beta.lower = beta.lower, beta.upper = beta.upper, ifixb = ifixb, max.iter = max.iterations, data.env = tls.data.env, Fxn = Delta.Ca.Total.Hat.C)
+  write(paste("Sum of total squared errors at final parameter estimates:",sgd.result$value,sep=" "), file = "results.txt")
+  write("",file = "results.txt", append = TRUE)
+  write("Paramter estimates:",file = "results.txt", append = TRUE)
+  write("",file = "results.txt", append = TRUE)
+#   write(parameter.names, file = "results.txt", append = TRUE)
+  write(paste(parameter.names, sgd.result$par, sep = ": "), file = "results.txt", append = TRUE)
+  write("",file = "results.txt", append = TRUE)
+  write("Standard errors were not estimated.",file = "results.txt", append = TRUE)
+
+print(paste("Sum of total squared errors at final parameter estimates:",sgd.result$value,sep=" "))
+print("Paramter estimates:")
+print(paste(parameter.names, sgd.result$par, sep = ": "))
+print("Standard errors were not estimated.")
+print(paste("A copy of these results can be found in", file.path(getwd(), "results.txt") ))
+}else{
+  boot.estimates <- NULL
+  
+  cl <- makeCluster(n.threads)
+  registerDoParallel(cl)
+  
+  boot.estimates <- NULL
+  boot.estimates <- foreach(i = seq(bootstrap.replicates), .packages=c("minpack.lm","mosaic"), .combine = rbind ) %dopar% {
+    boot.samples <- ((seq(nrow(x)) + resample(size = nrow(x),seq(-floor(nrow(x)/10), floor(nrow(x)/10)))) %% nrow(x)) + 1
+    tls.data.env <- new.env()
+    tls.data.env$x.error <- matrix(0,nrow = nrow(x), ncol = ncol(x))
+    sgd.result <- S.G.D.C(beta = beta, x = x[boot.samples,], y = matrix(y[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.weight = x.weight[boot.samples,], y.weight = matrix(y.weight[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.min = x.min, x.max = x.max, beta.lower = beta.lower, beta.upper = beta.upper, ifixb = ifixb, max.iter = max.iterations, data.env = tls.data.env, Fxn = Delta.Ca.Total.Hat.C)
+    
+    if(replace.on.boundary){
+      while(sum((abs(sgd.result$par[!ifixb] - beta.lower[!ifixb]) < boundary.margin[!ifixb]) + (abs(sgd.result$par[!ifixb] - beta.upper[!ifixb]) < boundary.margin[!ifixb])) > 0){
+        boot.samples <- ((seq(nrow(x)) + resample(size = nrow(x),seq(-floor(nrow(x)/10), floor(nrow(x)/10)))) %% nrow(x)) + 1
+        tls.data.env <- new.env()
+        tls.data.env$x.error <- matrix(0,nrow = nrow(x), ncol = ncol(x))
+        sgd.result <- S.G.D.C(beta = beta, x = x[boot.samples,], y = matrix(y[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.weight = x.weight[boot.samples,], y.weight = matrix(y.weight[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.min = x.min, x.max = x.max, beta.lower = beta.lower, beta.upper = beta.upper, ifixb = ifixb, max.iter = max.iterations, data.env = tls.data.env, Fxn = Delta.Ca.Total.Hat.C)
+      }
+      
+      
+    }
+    if(sgd.result$par[4] > sgd.result$par[6]){
+      beta.4 <- sgd.result$par[4]
+      sgd.result$par[4] <- sgd.result$par[6]
+      sgd.result$par[6] <- beta.4
+      
+      beta.5 <- sgd.result$par[5]
+      sgd.result$par[5] <- sgd.result$par[7]
+      sgd.result$par[7] <- beta.5
+    }
+    c(sgd.result$par,TSE=sgd.result$value)
+  }
+  
+  stopImplicitCluster()
+  stopCluster(cl)
+  
+  write.csv(boot.estimates, "results.txt", row.names = FALSE)
+  print(paste("Finished. Results are contained in", file.path(getwd(), "results.txt") ))
+}
+
+
