@@ -14,12 +14,19 @@ The zip file contains:
 A detailed user manual, "CalciumBufferingTLSUserManual.docx"
 
 3 R files:
+
 Setup.Ca.Buffering.TLS.R: installs required packages
+
 Ca.Buffering.TLS.Sub.R: contains subroutines for performing TLS fitting
+
 Run.Ca.Buffering.TLS.R: provides a user interface for fitting calcium buffering models
 
 4 data files:
+
 f.csv: initial and final fluorescence measurements
+
 f.sem.csv: estimated standard errors for fluorescence measurements
+
 ca.csv: change in total calcium concentration estimates obtained from integrated calcium currents
+
 ca.sem.csv: estimated standard errors for calcium increments
