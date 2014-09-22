@@ -50,40 +50,17 @@ T.L.S.Distance <- function(x.error, beta, x, y, x.weight, y.weight, Fxn, return.
     x.weight <- matrix(x.weight, nrow=1)
     y.weight <- matrix(y.weight, nrow=1)
   }
-  x.bound.penalty <- matrix(0,nrow(x),ncol(x))
-  if(!is.null(x.max)){
-    if(is.null(ncol(x.max))){
-      for(i in 1:length(x.max)){
-        x.bound.violations <- x.max[i] < x[,i] + x.error[,i]
-        x.bound.penalty[x.bound.violations,i] <- abs((x[,i] + x.error[,i])-x.max[i])[x.bound.violations]
-        x.error[x.bound.violations,i] <- (x.max[i] - x[,i])[x.bound.violations]
-      }
-    }else{
-      x.bound.violations <- x.max < x + x.error
-      x.bound.penalty[x.bound.violations] <- abs((x + x.error)-x.max)[x.bound.violations]
-      x.error[x.bound.violations] <- (x.max - x)[x.bound.violations]
-    }
-  }
   
-  
-  if(!is.null(x.min)){
-    if(is.null(ncol(x.min))){
-      for(i in 1:length(x.min)){
-        x.bound.violations <- x.min[i] > x[,i] + x.error[,i]
-        x.bound.penalty[x.bound.violations,i] <- x.bound.penalty[x.bound.violations,i] + abs((x[,i] + x.error[,i])-x.min[i])[x.bound.violations]
-        x.error[x.bound.violations,i] <- (x.min[i] - x[,i])[x.bound.violations]
-      }
-    }else{
-      x.bound.violations <- x.min > x + x.error
-      x.bound.penalty[x.bound.violations] <- abs((x + x.error)-x.min)[x.bound.violations]
-      x.error[x.bound.violations] <- (x.min - x)[x.bound.violations]
-    }
-  }
   
   y.hat <- Fxn(x+x.error,beta, ...)
+  #   y.hat[!is.finite(y.hat)] <- .Machine$double.xmax^.25
+  if(any(!is.finite(y.hat)) | any((x + x.error > x.max)) | any((x + x.error < x.min))){
+    y.hat <- y.hat + .Machine$double.xmax^.25
+  }
   y.error <- y.hat - y
   out <- NULL  
   x.out <- NULL  
+  
   
   
   
@@ -109,7 +86,6 @@ T.L.S.Distance <- function(x.error, beta, x, y, x.weight, y.weight, Fxn, return.
   
   
   out <- cbind(y.out,x.out)
-  out <- out * replicate(ncol(out),exp(rowSums(abs(x.bound.penalty))))
   out <- rowSums(out)
   
   if(!return.vector){
@@ -142,7 +118,9 @@ T.L.S <- function(beta, ifixb, ifixx, y, x, x.weight, y.weight, beta.lower=-Inf,
       x.weight <- matrix(replicate(nrow(x),matrix(x.weight,nrow=1)),nrow=nrow(x))
     }
     for(data.index in seq(nrow(x))){
-      fit <- optim(par=x.error[data.index,],fn = T.L.S.Distance.C, beta = beta, x = x[data.index, ] , y = y[data.index, ],x.weight = x.weight[data.index,] ,y.weight = y.weight[data.index,] ,Fxn = Fxn, x.max = x.max, x.min = x.min,lower = x.min - x[data.index, ], upper = x.max - x[data.index, ], method = "L-BFGS-B", ...)
+      x.err.start = .5 - x[data.index, ]
+      
+      fit <- optim(par=x.err.start, fn = T.L.S.Distance.C, beta = beta, x = x[data.index, ] , y = y[data.index, ],x.weight = x.weight[data.index,] ,y.weight = y.weight[data.index,] ,Fxn = Fxn, x.max = x.max, x.min = x.min, ...)
       values[data.index] <-  fit$value
       x.error[data.index,] <-  fit$par
     }
