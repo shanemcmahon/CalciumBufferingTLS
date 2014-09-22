@@ -1,0 +1,17 @@
+{
+    "contents" : "T.L.S.Distance <- function(x.error, beta, x, y, x.weight, y.weight, Fxn, return.vector=FALSE,x.max=NULL,x.min=NULL, return.matrix = FALSE, ...){\n  \n  if(is.null(dim(x))){\n    x <- matrix(x,nrow=1)\n    x.error <- matrix(x.error, nrow=1)\n    x.weight <- matrix(x.weight, nrow=1)\n    y.weight <- matrix(y.weight, nrow=1)\n  }\n\n\n  y.hat <- Fxn(x+x.error,beta, ...)\n#   y.hat[!is.finite(y.hat)] <- .Machine$double.xmax^.25\n  if(any(!is.finite(y.hat)) | any((x + x.error > x.max)) | any((x + x.error < x.min))){\n    y.hat <- y.hat + .Machine$double.xmax^.25\n  }\n  y.error <- y.hat - y\n  out <- NULL  \n  x.out <- NULL  \n\n\n\n  \n  if(is.null(ncol(x.weight))){\n    for(i in 1:length(x.weight)){\n      x.out <- cbind(x.out, x.error[,i]^2*x.weight[i]^2)\n    }\n  }else{\n    x.out <- (x.error^2*x.weight^2)\n  }\n  \n  y.out <- NULL  \n  if(is.null(ncol(y.weight))){\n    \n    for(i in 1:length(y.weight)){\n      y.out <- cbind(y.out, y.error[,i]^2*y.weight[i]^2)\n    }\n  }else{\n    y.out <- (y.error^2*y.weight^2)\n  }\n  \n  \n  \n  \n  out <- cbind(y.out,x.out)\n  out <- rowSums(out)\n  \n  if(!return.vector){\n    return(sum(out)^.5)\n  }\n  return(out^.5)\n}\nT.L.S.Distance.C <- cmpfun(T.L.S.Distance)",
+    "created" : 1411404539992.000,
+    "dirty" : true,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "3562033742",
+    "id" : "153C2ED6",
+    "lastKnownWriteTime" : 2332068775307771905,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "tempName" : "Untitled3"
+    },
+    "source_on_save" : false,
+    "type" : "r_source"
+}

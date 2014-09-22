@@ -1,0 +1,17 @@
+{
+    "contents" : "T.L.S <- function(beta, ifixb, ifixx, y, x, x.weight, y.weight, beta.lower=-Inf, beta.upper=Inf, return.vector=FALSE, Fxn, x.error, beta2 = NULL,tls.env , x.max=NULL, x.min=NULL,...){\n  \n  if(!is.null(beta2)){\n    beta2[!ifixb] <- beta\n    beta <- beta2\n  }\n  values <- array(0, nrow(x))\n  ifixb <- as.logical(ifixb)\n  beta <- unlist(beta)\n  if(length(beta.lower)!=length(beta)){\n    beta.lower <- rep(-Inf,length(beta))\n  }\n  if(length(beta.upper)!=length(beta)){\n    beta.upper <- rep(Inf,length(beta))\n  }\n  if(!ifixx){\n    if(length(y.weight) < length(y)){\n      y.weight <- matrix(replicate(nrow(y),matrix(y.weight,nrow=1)),nrow=nrow(y))\n    }\n    if(length(x.weight) < length(x)){\n      x.weight <- matrix(replicate(nrow(x),matrix(x.weight,nrow=1)),nrow=nrow(x))\n    }\n    for(data.index in seq(nrow(x))){\n      x.err.start = .5 - x[data.index, ]\n\n      fit <- optim(par=x.err.start, fn = T.L.S.Distance.C, beta = beta, x = x[data.index, ] , y = y[data.index, ],x.weight = x.weight[data.index,] ,y.weight = y.weight[data.index,] ,Fxn = Fxn, x.max = x.max, x.min = x.min, ...)\n      values[data.index] <-  fit$value\n      x.error[data.index,] <-  fit$par\n    }\n    \n    tls.env$x.error <- x.error\n  }else{ #ifixx\n    values <- T.L.S.Distance.C(x.error = x.error,beta = beta,x = x,y = y,x.weight = x.weight,y.weight = y.weight, Fxn = Fxn, return.vector = TRUE,x.max = x.max, x.min = x.min, ...)\n  } #ifixb\n  \n  \n  if (any(beta[!ifixb] < beta.lower[!ifixb])){\n    values <- values * (1 + sum(abs((beta.lower[!ifixb] - beta[!ifixb])[which(beta[!ifixb] < beta.lower[!ifixb])]) ) ) \n  }\n  if (any(beta[!ifixb] > beta.upper[!ifixb])){\n    values <- values * (1 + sum(abs((beta[!ifixb] - beta.upper[!ifixb])[which(beta[!ifixb] > beta.upper[!ifixb])]) ) )\n  }\n  \n  \n  if(return.vector==TRUE){\n    return(values)\n  }\n  return(sum(values^2))\n}\nT.L.S.C <- cmpfun(T.L.S)",
+    "created" : 1411405905235.000,
+    "dirty" : true,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "661045502",
+    "id" : "CACD3727",
+    "lastKnownWriteTime" : 0,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "tempName" : "Untitled4"
+    },
+    "source_on_save" : false,
+    "type" : "r_source"
+}
