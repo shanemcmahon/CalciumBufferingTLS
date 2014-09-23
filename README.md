@@ -3,10 +3,6 @@ CalciumBufferingTLS
 
 Source code to fit calcium buffering data to a 1-3 buffer saturable buffer model using total least squares.
 
-Original source code is included as old.source.R, but the functions have been rewritten for clarity and to lessen the burden of making updates in the future. The newer source is also allows for fitting arbitrary, user specefied models, while the original version works only for the built in calcium buffering model.
-
-The current version seemed to performed adequately on a number of test data sets. However, after applying it to a larger number of data sets it has become clear that the current version fails to find the minimum with significantly greater frequency than the original code. We are currently debugging this issue and hope to have it resolved soon.
-
 Source code to accompany the paper "In Situ Ca2+ Titration in the Fluorometric Study of Intracellular Ca2+ Binding"
 
 Includes a library for total least squares regression on arbitrary models using a stochastic gradient descent algorithm, an interface for performing the regression on a calcium buffering model, and an example data set.

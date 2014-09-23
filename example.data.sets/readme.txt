@@ -1,0 +1,4 @@
+This folder contains a number of example data sets.
+The results of a fit to the data are included for reference.
+
+As discussed in the paper, under certain theoretical conditions, it may not be possible to find a unique set of parameters that minimize the total squared error, but rather the TSE is minimized by a family of solutions related by a scaling factor alpha. See the accompanying paper for further details. Under some experimental conditions, i.e. poor signal to noise ratio, alpha may also be poorly determined. We can easily determine if a unique solutions exists by examining a plot of TSE as a function of alpha. Such plots have been included with the example data sets.

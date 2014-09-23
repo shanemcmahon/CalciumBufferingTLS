@@ -1,0 +1,15 @@
+Sum of total squared errors at final parameter estimates: 433.158005208836
+
+Paramter estimates:
+
+rf: 50
+kd.dye: 0.133504716278337
+bt.dye: 100
+kd.endogenous.1: 0.696788563904664
+bt.endogenous.1: 79.3722191314891
+kd.endogenous.2: 0
+bt.endogenous.2: 0
+kappa.nonsaturable: 0
+accessible.volume: 0.188462053776576
+
+Standard errors were not estimated.

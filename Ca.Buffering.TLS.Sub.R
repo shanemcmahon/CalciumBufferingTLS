@@ -201,7 +201,7 @@ T.L.S.Gradient <- function(beta, x, y, x.error, x.weight, y.weight, beta2=NULL, 
 }
 T.L.S.Gradient.C <- cmpfun(T.L.S.Gradient)
 
-S.G.D <- function(beta, x, y, x.error=NULL, x.weight, y.weight, x.min = NULL, x.max = NULL, beta.lower, beta.upper, ifixb, Objective.Fxn = T.L.S.C, solution.tolerance=.Machine$double.eps^.5, max.iter = 5000, num.steps = 500, Grad = T.L.S.Gradient.C, decay.constant=.9995, data.env = new.env(), Fxn, parameter.boundary.margin = .01, p.restart = 1, p.restart.decay = .5,   p.restart.grow = 1.1, p.check.obj = .05, p.goto.best.par = .005, p.check.boundary = .01, ...){
+S.G.D <- function(beta, x, y, x.error=NULL, x.weight, y.weight, x.min = NULL, x.max = NULL, beta.lower, beta.upper, ifixb, Objective.Fxn = T.L.S.C, solution.tolerance=.Machine$double.eps^.5, max.iter = 5000, num.steps = 500, Grad = T.L.S.Gradient.C, decay.constant=.9995, data.env = new.env(), Fxn, parameter.boundary.margin = .01, p.restart = 1, p.restart.decay = .5,   p.restart.grow = 1.1, p.check.obj = .05, p.goto.best.par = .005, p.check.boundary = .01, p.rescale = .005, rescale.vector = NULL, ...){
   #   Function: S.G.D (Stochastic Gradient Descent)
   # S.G.D is a implementation of a stochastic gradient descent algorithm, in principle it can be used to minimize arbitrary user specefied functions but it was designed with the total least squares problem in mind
   # Fxn: a user specefied function, here by default the function is a model of calcium buffering. the calling sequence for Fxn is Fxn(x, beta)
@@ -330,6 +330,25 @@ S.G.D <- function(beta, x, y, x.error=NULL, x.weight, y.weight, x.min = NULL, x.
       current.val <- Objective.Fxn(beta = beta,ifixb = ifixb,ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, Fxn = Fxn, x.error = x.error, tls.env = data.env, x.min = x.min, x.max = x.max  )
       x.error <- data.env$x.error
     }
+    
+    if(runif(1) < p.rescale){
+      if(!is.null(rescale.vector)){
+        
+        if(all((beta[!ifixb] * rescale.vector[!ifixb] < beta.upper[!ifixb]) & (beta[!ifixb] * rescale.vector[!ifixb] > beta.lower[!ifixb]))){
+          beta[!ifixb] <- beta[!ifixb] * rescale.vector[!ifixb]
+          current.val <- Objective.Fxn(beta = beta,ifixb = ifixb,ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, Fxn = Fxn, x.error = x.error, tls.env = data.env, x.min = x.min, x.max = x.max  )
+          x.error <- data.env$x.error
+        }else{
+          if(all((beta[!ifixb]/rescale.vector[!ifixb] < beta.upper[!ifixb]) & (beta[!ifixb]/rescale.vector[!ifixb] > beta.lower[!ifixb]))){
+            beta[!ifixb] <- beta[!ifixb]/rescale.vector[!ifixb]
+            current.val <- Objective.Fxn(beta = beta,ifixb = ifixb,ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, Fxn = Fxn, x.error = x.error, tls.env = data.env, x.min = x.min, x.max = x.max  )
+            x.error <- data.env$x.error
+          } 
+        }
+        
+        
+      }
+    }
     # calculate gradient
     delta <- Grad(beta = beta,x = matrix(x[shuffle.seq[reshuffle.counter],] ,ncol = ncol(x)), y = matrix(y[shuffle.seq[reshuffle.counter],], ncol = ncol(y)), x.error = matrix(x.error[shuffle.seq[reshuffle.counter],], ncol = ncol(x)), x.weight = matrix(x.weight[shuffle.seq[reshuffle.counter],], ncol = ncol(x)), y.weight = matrix(y.weight[shuffle.seq[reshuffle.counter],], ncol = ncol(y)), beta.lower = beta.lower, beta.upper = beta.upper, Fxn = Fxn, ifixx = TRUE, ifixb = ifixb,tls.env = data.env, x.min = x.min, x.max = x.max )
     
@@ -404,7 +423,7 @@ ifixb <- parameter.is.fixed
 
 
 if(!do.bootstrap.estimate){
-  sgd.result <- S.G.D.C(beta = beta, x = x, y = y, x.weight = x.weight, y.weight = y.weight, x.min = x.min, x.max = x.max, beta.lower = beta.lower, beta.upper = beta.upper, ifixb = ifixb, max.iter = max.iterations, data.env = tls.data.env, Fxn = Delta.Ca.Total.Hat.C, parameter.boundary.margin = parameter.boundary.margin, p.restart = p.restart, p.restart.decay = p.restart.decay,   p.restart.grow = p.restart.grow, p.check.obj = p.check.obj, p.goto.best.par = p.goto.best.par)
+  sgd.result <- S.G.D.C(beta = beta, x = x, y = y, x.weight = x.weight, y.weight = y.weight, x.min = x.min, x.max = x.max, beta.lower = beta.lower, beta.upper = beta.upper, ifixb = ifixb, max.iter = max.iterations, data.env = tls.data.env, Fxn = Delta.Ca.Total.Hat.C, parameter.boundary.margin = parameter.boundary.margin, p.restart = p.restart, p.restart.decay = p.restart.decay,   p.restart.grow = p.restart.grow, p.check.obj = p.check.obj, p.goto.best.par = p.goto.best.par, rescale.vector = rescale.vector, p.rescale = p.rescale)
   write(paste("Sum of total squared errors at final parameter estimates:",sgd.result$value,sep=" "), file = "results.txt")
   write("",file = "results.txt", append = TRUE)
   write("Paramter estimates:",file = "results.txt", append = TRUE)
@@ -430,14 +449,14 @@ print(paste("A copy of these results can be found in", file.path(getwd(), "resul
     boot.samples <- ((seq(nrow(x)) + resample(size = nrow(x),seq(-floor(nrow(x)/10), floor(nrow(x)/10)))) %% nrow(x)) + 1
     tls.data.env <- new.env()
     tls.data.env$x.error <- matrix(0,nrow = nrow(x), ncol = ncol(x))
-    sgd.result <- S.G.D.C(beta = beta, x = x[boot.samples,], y = matrix(y[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.weight = x.weight[boot.samples,], y.weight = matrix(y.weight[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.min = x.min, x.max = x.max, beta.lower = beta.lower, beta.upper = beta.upper, ifixb = ifixb, max.iter = max.iterations, data.env = tls.data.env, Fxn = Delta.Ca.Total.Hat.C, parameter.boundary.margin = parameter.boundary.margin, p.restart = p.restart, p.restart.decay = p.restart.decay,   p.restart.grow = p.restart.grow, p.check.obj = p.check.obj, p.goto.best.par = p.goto.best.par)
+    sgd.result <- S.G.D.C(beta = beta, x = x[boot.samples,], y = matrix(y[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.weight = x.weight[boot.samples,], y.weight = matrix(y.weight[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.min = x.min, x.max = x.max, beta.lower = beta.lower, beta.upper = beta.upper, ifixb = ifixb, max.iter = max.iterations, data.env = tls.data.env, Fxn = Delta.Ca.Total.Hat.C, parameter.boundary.margin = parameter.boundary.margin, p.restart = p.restart, p.restart.decay = p.restart.decay,   p.restart.grow = p.restart.grow, p.check.obj = p.check.obj, p.goto.best.par = p.goto.best.par, rescale.vector = rescale.vector, p.rescale = p.rescale)
     
     if(replace.on.boundary){
       while(sum((abs(sgd.result$par[!ifixb] - beta.lower[!ifixb]) < boundary.margin[!ifixb]) + (abs(sgd.result$par[!ifixb] - beta.upper[!ifixb]) < boundary.margin[!ifixb])) > 0){
         boot.samples <- ((seq(nrow(x)) + resample(size = nrow(x),seq(-floor(nrow(x)/10), floor(nrow(x)/10)))) %% nrow(x)) + 1
         tls.data.env <- new.env()
         tls.data.env$x.error <- matrix(0,nrow = nrow(x), ncol = ncol(x))
-        sgd.result <- S.G.D.C(beta = beta, x = x[boot.samples,], y = matrix(y[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.weight = x.weight[boot.samples,], y.weight = matrix(y.weight[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.min = x.min, x.max = x.max, beta.lower = beta.lower, beta.upper = beta.upper, ifixb = ifixb, max.iter = max.iterations, data.env = tls.data.env, Fxn = Delta.Ca.Total.Hat.C)
+        sgd.result <- S.G.D.C(beta = beta, x = x[boot.samples,], y = matrix(y[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.weight = x.weight[boot.samples,], y.weight = matrix(y.weight[boot.samples,], nrow = nrow(y), ncol = ncol(y)), x.min = x.min, x.max = x.max, beta.lower = beta.lower, beta.upper = beta.upper, ifixb = ifixb, max.iter = max.iterations, data.env = tls.data.env, Fxn = Delta.Ca.Total.Hat.C, parameter.boundary.margin = parameter.boundary.margin, p.restart = p.restart, p.restart.decay = p.restart.decay,   p.restart.grow = p.restart.grow, p.check.obj = p.check.obj, p.goto.best.par = p.goto.best.par, rescale.vector = rescale.vector, p.rescale = p.rescale)
       }
       
       

@@ -1,0 +1,17 @@
+{
+    "contents" : "# this script will read in a csv file with calcium data of the format in fluo-8, process the data to generate a series of experimental fluorescence measurements, and generate a set of total calcium increments corresponding to a specified model beta. chisq from a series multiplier values is calculated and ploted\n\ncalcium.data.censored <- read.csv(\"ls.csv\")\ncalcium.data.censored <- calcium.data.censored[calcium.data.censored$Fi < .9 & calcium.data.censored$Ff < .9,]\ncalcium.data.censored <- calcium.data.censored[(calcium.data.censored$p.saturated > .1),]\n# f <- cbind(calcium.data.censored$f.i,calcium.data.censored$f.f)\nf <- cbind(calcium.data.censored$Fi,calcium.data.censored$Ff)\nwrite.csv(f, \"f.csv\", row.names = FALSE)\nf.sem <- mean(c(calcium.data.censored$sem_Fi,calcium.data.censored$sem_Ff))\nf.sem <- matrix(f.sem,nrow = nrow(f),ncol = ncol(f) )\nwrite.csv(f.sem, \"f.sem.csv\", row.names = FALSE)\n# d.ca <- calcium.data.censored$delta.ca.total\nd.ca <- calcium.data.censored$delta_ca_total/1000\nd.ca <- matrix(d.ca, nrow = nrow(f))\nwrite.csv(d.ca, \"d.ca.csv\", row.names=FALSE)\n# d.ca.sem <- calcium.data.censored$noise_i_ca\nd.ca.sem <- abs((calcium.data.censored$noise_i_ca/calcium.data.censored$sum_i_ca)*calcium.data.censored$delta_ca_total)/1000\nd.ca.sem <- mean(d.ca.sem)\nd.ca.sem <- matrix(d.ca.sem, nrow = nrow(d.ca), ncol = ncol(d.ca))\nwrite.csv(d.ca.sem, \"d.ca.sem.csv\", row.names = FALSE)\n\nbeta <- c(rf = 50, kd.dye = .380, bt.dye = 100, kd.1 = .8, bt.1 = 100, kd.2 = 0, bt.2 = 0, kappa.nonsaturable = 0, accessible.volume = .5  )\nx <- f\ny <- d.ca\ny.weight <- 1/d.ca.sem\nx.weight <- 1/f.sem\nx.error <- x * 0\ndata.env <- new.env()\nasdf <- T.L.S.C(beta = beta, ifixb = ifixb, ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, beta.lower = beta.lower, beta.upper = beta.upper, Fxn = Delta.Ca.Total.Hat.C, x.error = x.error, tls.env = data.env, x.max = x.max, x.min = x.min)\n\nx.error <- data.env$x.error\nx <- x + x.error\ny <- Delta.Ca.Total.Hat.C(x = x, beta = beta)\n\nx <- x + matrix(data = rnorm(n = length(x) ,sd = mean(1/x.weight)),nrow = nrow(x), ncol = ncol(x))\ny <- y + matrix(data = rnorm(n = length(y) ,sd = mean(1/y.weight)),nrow = nrow(y), ncol = ncol(y))\n\n# asdf <- T.L.S.C(beta = beta, ifixb = ifixb, ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, beta.lower = beta.lower, beta.upper = beta.upper, Fxn = Delta.Ca.Total.Hat.C, x.error = x.error, tls.env = data.env, x.max = x.max, x.min = x.min)\n\n\n# beta2 <- beta\nmy.chisq <- NULL\nbetas <- (5:20)/10\n\nfor( i in seq(betas)){\n  beta2 <- beta\n  beta2[!ifixb] <- beta2[!ifixb] * c(1,betas[i],1,betas[i],betas[i],1,1,1,1/betas[i])[!ifixb]\n  my.chisq <- c(my.chisq, T.L.S.C(beta = beta2, ifixb = ifixb, ifixx = FALSE, y = y, x = x, x.weight = x.weight, y.weight = y.weight, beta.lower = beta.lower, beta.upper = beta.upper, Fxn = Delta.Ca.Total.Hat.C, x.error = x.error, tls.env = data.env, x.max = x.max, x.min = x.min))\n  print(i)\n}\n\nplot(betas,my.chisq)\n",
+    "created" : 1411431393957.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1103286527",
+    "id" : "A85716DE",
+    "lastKnownWriteTime" : 1411434081,
+    "path" : "F:/2013/kd estimation/playground/20140922.R",
+    "project_path" : null,
+    "properties" : {
+        "tempName" : "Untitled2"
+    },
+    "source_on_save" : false,
+    "type" : "r_source"
+}

@@ -13,7 +13,7 @@ F.MIN <- .01
 F.MAX <- .999
 
 # max.iterations specifies the maximum number of stochastic gradient descent iterations to perform. In the current verstion, reaching max.iterations is the only method for terminating the fit, and exactly max.iterations will always be performed.
-max.iterations <- 25000
+max.iterations <- 10000
 
 # The full model contains nine total parameters:
 # the dynamic range, rf
@@ -31,7 +31,7 @@ max.iterations <- 25000
 parameter.is.fixed <- c(rf = TRUE, kd.dye = FALSE, bt.dye = TRUE, kd.1 = FALSE, bt.1 = FALSE, kd.2 = TRUE, bt.2 = TRUE, kappa.nonsaturable = TRUE, accessible.volume = FALSE)
 
 # The user must specify starting values for the parameters. The stochastic gradient descent algorithm is designed to escape local "false" optima in the parameter space that can be attributed to measurement noise. Therefore, it is not especially sensitive to starting estimates provided that a unique optimum exists. Extremely poor choices for starting parameters, however, may cause the algorithm to behave poorly. For parameters that are fixed, their values are fixed at the initial estimate provided in beta.
-beta <- c(rf = 50, kd.dye = .380, bt.dye = 100, kd.1 = 1, bt.1 = 500, kd.2 = 0, bt.2 = 0, kappa.nonsaturable = 0, accessible.volume = .5  )
+beta <- c(rf = 50, kd.dye = .380, bt.dye = 100, kd.1 = 0, bt.1 = 0, kd.2 = 0, bt.2 = 0, kappa.nonsaturable = 0, accessible.volume = 1)
 
 
 #The algorithm requires lower and upper bounds on parameters. Poor performance can be guaranteed by improper specification of the upper and lower bounds on beta. Some simple physical considerations provide guidelines for choosing good boundaries. Clearly the kd for the dye and any endogenous buffers must be positive. If the kd of the endogenous buffer were too large then it would not even partially saturate over the range of observable free calcium values. Therefore, the upper bounds on the endogenous buffer kd's may be taken to be some multiple of the dye kd. Extremely low affinity buffers can be modeled as nonsaturable buffers. The nonsaturable buffering capacity, if present, must be strictly nonnegative and an upper limit must be estimated by considerations of the preparation. Strictly speaking, the fraction of accessible volume must be less than or equal to one, however, some allowance should be made for under estimation of the total volume.  The lower boundary for the fraction of accessible volume must be strictly greater than zero, and a suitable value may be estimated from knowledge of the preparation.
@@ -83,6 +83,9 @@ p.check.obj = .05
 
 # p.goto.best.par: with probably p.goto.best.par set beta to the best parameters observed so far
 p.goto.best.par = .005
+
+rescale.vector = c(1,.9,1,.9,.9,.9,.9,1,1.1111)
+p.rescale = .005
 
 #Done setting variables. Stop modifying here. When this script is executed, a sequence of file chooser dialog boxes will open. For each dialog box, the program will print to the R console a description of which file should be chosen. The program will request the location for the fluorescence data file, the fluorescence measurement standard errors, calcium increment, and calcium increment standard errors, in that order. After the data files are read, the fitting process will begin. A single run can be very time consuming, and calculating parameter standard errors from bootstraping will be proportionally longer by a factor of bootstrap.replicates/n.threads. 
 #If do.bootstrap.estimates = FALSE, then the program will output status updates to the R console as described in the manual. If do.bootstrap.estimates = TRUE, then n.threads will be run in parallel. In this case, the parallel processing facility will supress output to the R console. Output is supressed even for n.threads=1.
