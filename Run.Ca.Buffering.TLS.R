@@ -13,7 +13,7 @@ F.MIN <- .01
 F.MAX <- .999
 
 # max.iterations specifies the maximum number of stochastic gradient descent iterations to perform. In the current verstion, reaching max.iterations is the only method for terminating the fit, and exactly max.iterations will always be performed.
-max.iterations <- 10000
+max.iterations <- 20000
 
 # The full model contains nine total parameters:
 # the dynamic range, rf
@@ -56,7 +56,7 @@ boundary.margin = (beta.upper - beta.lower) * (.Machine$double.eps)^.5
 
 #The data files may be specefied in one of two ways. If interactive.file.chooser = TRUE then, when this script is ran, the user will select the files interactively through a file chooser dialog box. If interactive.file.chooser = FALSE then the file names with full paths must be specefied below.
 
-interactive.file.chooser = FALSE
+interactive.file.chooser = TRUE
 #file path to the directory containing the data:
 data.directory = "F:/2013/kd estimation/CalciumBufferingTLS"
 #The fluorescence measurement data:
