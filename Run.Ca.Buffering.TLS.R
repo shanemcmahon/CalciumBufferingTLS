@@ -31,7 +31,7 @@ max.iterations <- 20000
 parameter.is.fixed <- c(rf = TRUE, kd.dye = FALSE, bt.dye = TRUE, kd.1 = FALSE, bt.1 = FALSE, kd.2 = TRUE, bt.2 = TRUE, kappa.nonsaturable = TRUE, accessible.volume = FALSE)
 
 # The user must specify starting values for the parameters. The stochastic gradient descent algorithm is designed to escape local "false" optima in the parameter space that can be attributed to measurement noise. Therefore, it is not especially sensitive to starting estimates provided that a unique optimum exists. Extremely poor choices for starting parameters, however, may cause the algorithm to behave poorly. For parameters that are fixed, their values are fixed at the initial estimate provided in beta.
-beta <- c(rf = 50, kd.dye = .380, bt.dye = 100, kd.1 = 0, bt.1 = 0, kd.2 = 0, bt.2 = 0, kappa.nonsaturable = 0, accessible.volume = 1)
+beta <- c(rf = 50, kd.dye = .380, bt.dye = 100, kd.1 = 1, bt.1 = .Machine$double.eps^.5, kd.2 = 0, bt.2 = 0, kappa.nonsaturable = 0, accessible.volume = 1)
 
 
 #The algorithm requires lower and upper bounds on parameters. Poor performance can be guaranteed by improper specification of the upper and lower bounds on beta. Some simple physical considerations provide guidelines for choosing good boundaries. Clearly the kd for the dye and any endogenous buffers must be positive. If the kd of the endogenous buffer were too large then it would not even partially saturate over the range of observable free calcium values. Therefore, the upper bounds on the endogenous buffer kd's may be taken to be some multiple of the dye kd. Extremely low affinity buffers can be modeled as nonsaturable buffers. The nonsaturable buffering capacity, if present, must be strictly nonnegative and an upper limit must be estimated by considerations of the preparation. Strictly speaking, the fraction of accessible volume must be less than or equal to one, however, some allowance should be made for under estimation of the total volume.  The lower boundary for the fraction of accessible volume must be strictly greater than zero, and a suitable value may be estimated from knowledge of the preparation.
@@ -56,7 +56,7 @@ boundary.margin = (beta.upper - beta.lower) * (.Machine$double.eps)^.5
 
 #The data files may be specefied in one of two ways. If interactive.file.chooser = TRUE then, when this script is ran, the user will select the files interactively through a file chooser dialog box. If interactive.file.chooser = FALSE then the file names with full paths must be specefied below.
 
-interactive.file.chooser = TRUE
+interactive.file.chooser = FALSE
 #file path to the directory containing the data:
 data.directory = "F:/2013/kd estimation/CalciumBufferingTLS"
 #The fluorescence measurement data:
